@@ -34,14 +34,10 @@ namespace ByteBank.View
 
         private void BtnProcessar_Click(object sender, RoutedEventArgs e)
         {
+            var taskSchedulerUI = TaskScheduler.FromCurrentSynchronizationContext(); //Pegar a task scheduler da UI está em execução
+            BtnProcessar.IsEnabled = false;
+
             var contas = r_Repositorio.GetContaClientes();
-
-            var contasQuantidadePorThread = contas.Count() / 4;
-
-            var contas_parte1 = contas.Take(contasQuantidadePorThread);
-            var contas_parte2 = contas.Skip(contasQuantidadePorThread).Take(contasQuantidadePorThread);
-            var contas_parte3 = contas.Skip(contasQuantidadePorThread * 2).Take(contasQuantidadePorThread);
-            var contas_parte4 = contas.Skip(contasQuantidadePorThread * 3).Take(contasQuantidadePorThread);
 
             var resultado = new List<string>();
 
@@ -49,62 +45,23 @@ namespace ByteBank.View
 
             var inicio = DateTime.Now;
 
-            //foreach (var conta in contas)
-            //{
-            //    var resultadoConta = r_Servico.ConsolidarMovimentacao(conta);
-            //    resultado.Add(resultadoConta);
-            //}
-
-            Thread thread_parte1 = new Thread(() =>
+            var contaTarefas = contas.Select(conta =>
             {
-                foreach (var conta in contas_parte1)
+                return Task.Factory.StartNew(() =>
                 {
-                    var resultadoProcessamento = r_Servico.ConsolidarMovimentacao(conta);
-                    resultado.Add(resultadoProcessamento);
-                }
+                    var resultadoConta = r_Servico.ConsolidarMovimentacao(conta);
+                    resultado.Add(resultadoConta);
+
+                });
+            }).ToArray();//O ToArray() serve para a execução do linq
+
+            //Task.WaitAll(contaTarefas);
+            Task.WhenAll(contaTarefas).ContinueWith(task =>
+            {
+                var fim = DateTime.Now;
+                AtualizarView(resultado, fim - inicio);
             });
 
-            Thread thread_parte2 = new Thread(() =>
-            {
-                foreach (var conta in contas_parte2)
-                {
-                    var resultadoProcessamento = r_Servico.ConsolidarMovimentacao(conta);
-                    resultado.Add(resultadoProcessamento);
-                }
-            });
-
-            Thread thread_parte3 = new Thread(() =>
-            {
-                foreach (var conta in contas_parte3)
-                {
-                    var resultadoProcessamento = r_Servico.ConsolidarMovimentacao(conta);
-                    resultado.Add(resultadoProcessamento);
-                }
-            });
-
-            Thread thread_parte4 = new Thread(() =>
-            {
-                foreach (var conta in contas_parte4)
-                {
-                    var resultadoProcessamento = r_Servico.ConsolidarMovimentacao(conta);
-                    resultado.Add(resultadoProcessamento);
-                }
-            });
-
-            thread_parte1.Start();
-            thread_parte2.Start();
-            thread_parte3.Start();
-            thread_parte4.Start();
-
-            while (thread_parte1.IsAlive || thread_parte2.IsAlive || thread_parte3.IsAlive || thread_parte4.IsAlive)
-            {
-                //Checagem utilizada para evitar que o programe continue sendo processado independente da execução das threads
-                Thread.Sleep(250); // Evita de ficar agulhando o tempo inteiro em busca de resposta do término das threads
-            }
-
-            var fim = DateTime.Now;
-
-            AtualizarView(resultado, fim - inicio);
         }
 
         private void AtualizarView(List<String> result, TimeSpan elapsedTime)
